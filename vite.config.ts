@@ -11,28 +11,26 @@ export default defineConfig(({ mode }) => {
       react(),
       // Only run obfuscation when building for production
       isProduction && obfuscatorPlugin({
-        global: true,
         // Exclude node_modules to prevent breaking vendor libraries
-        include: ['src/**/*.js', 'src/**/*.ts', 'src/**/*.tsx'],
         exclude: [/node_modules/], 
         options: {
           // --- Safe 3D Game Settings ---
-          compact: true,
+          compact: false, // FALSE to prevent syntax/reference errors in bundles
           controlFlowFlattening: false, 
           deadCodeInjection: false,
           
           // --- Protection Settings (Safe Profile) ---
           debugProtection: false,
           disableConsoleOutput: true,
-          identifierNamesGenerator: 'mangled', // Changed from 'hexadecimal' for better stability
+          identifierNamesGenerator: 'hexadecimal', // 'hexadecimal' is safer than 'mangled'
           log: false,
           renameGlobals: false,
           rotateStringArray: true,
-          selfDefending: false, // Disabled: often causes crashes in modern browsers
+          selfDefending: false, 
           stringArray: true,
           stringArrayThreshold: 0.75,
-          splitStrings: false, // Disabled: prevents string breaking errors
-          transformObjectKeys: false, // CRITICAL: Disabled to keep Three.js props working
+          splitStrings: false, 
+          transformObjectKeys: false, 
         }
       })
     ],

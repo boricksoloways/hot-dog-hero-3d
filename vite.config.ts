@@ -12,36 +12,33 @@ export default defineConfig(({ mode }) => {
       // Only run obfuscation when building for production
       isProduction && obfuscatorPlugin({
         global: true,
-        // Exclude node_modules (vendor scripts) to keep build fast and performance high
+        // Exclude node_modules to prevent breaking vendor libraries
         include: ['src/**/*.js', 'src/**/*.ts', 'src/**/*.tsx'],
         exclude: [/node_modules/], 
         options: {
-          // --- 3D Game Performance Settings ---
-          // We disable heavy logic mangling (ControlFlowFlattening) 
-          // because it destroys FPS in the render loop.
+          // --- Safe 3D Game Settings ---
           compact: true,
           controlFlowFlattening: false, 
           deadCodeInjection: false,
           
-          // --- Protection Settings ---
+          // --- Protection Settings (Safe Profile) ---
           debugProtection: false,
-          disableConsoleOutput: true, // Hides logs in production
-          identifierNamesGenerator: 'hexadecimal',
+          disableConsoleOutput: true,
+          identifierNamesGenerator: 'mangled', // Changed from 'hexadecimal' for better stability
           log: false,
           renameGlobals: false,
           rotateStringArray: true,
-          selfDefending: true,
+          selfDefending: false, // Disabled: often causes crashes in modern browsers
           stringArray: true,
           stringArrayThreshold: 0.75,
-          splitStrings: true,
-          transformObjectKeys: true,
+          splitStrings: false, // Disabled: prevents string breaking errors
+          transformObjectKeys: false, // CRITICAL: Disabled to keep Three.js props working
         }
       })
     ],
     base: './', 
     build: {
       outDir: 'dist',
-      // Ensure separate chunks so we don't accidentally try to obfuscate 3MB of Three.js code
       rollupOptions: {
         output: {
           manualChunks: {

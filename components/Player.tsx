@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 import React, { useEffect, useRef } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import { useSphere } from '@react-three/cannon';
@@ -7,7 +8,7 @@ import { IngredientType } from '../types';
 
 interface PlayerProps {
   heldItem: IngredientType | null;
-  setHeldItem: (item: IngredientType | null) => void;
+  pickUpItem: (type: IngredientType, id?: string) => void;
   throwItem: (pos: [number, number, number], vel: [number, number, number]) => void;
   setHovering: (hover: boolean) => void;
   setIsLocked: (locked: boolean) => void;
@@ -16,25 +17,35 @@ interface PlayerProps {
 const SPEED = 6;
 const JUMP_FORCE = 6;
 const THROW_FORCE = 18;
-const INTERACTION_DISTANCE = 20; // Generous reach
+const INTERACTION_DISTANCE = 20; 
+
+interface InteractableData {
+    type: IngredientType;
+    id?: string; // Only present for dynamic items
+    isSpawner?: boolean;
+}
 
 // Helper to find interactable ancestor
-function getInteractableObject(object: THREE.Object3D): { type: IngredientType } | null {
+function getInteractableObject(object: THREE.Object3D): InteractableData | null {
   let curr: THREE.Object3D | null = object;
   while (curr) {
     if (curr.userData && curr.userData.interactable) {
-      return { type: curr.userData.type };
+      return { 
+          type: curr.userData.type,
+          id: curr.userData.id,
+          isSpawner: curr.userData.isSpawner
+      };
     }
     curr = curr.parent;
   }
   return null;
 }
 
-export const Player: React.FC<PlayerProps> = ({ heldItem, setHeldItem, throwItem, setHovering, setIsLocked }) => {
+export const Player: React.FC<PlayerProps> = ({ heldItem, pickUpItem, throwItem, setHovering, setIsLocked }) => {
   const { camera, raycaster, scene } = useThree();
   
   // This Ref holds the object currently under the crosshair/mouse.
-  const focusedItemRef = useRef<IngredientType | null>(null);
+  const focusedItemRef = useRef<InteractableData | null>(null);
   
   // Physics Body
   const [ref, api] = useSphere(() => ({ 
@@ -85,9 +96,7 @@ export const Player: React.FC<PlayerProps> = ({ heldItem, setHeldItem, throwItem
       api.velocity.set(velocity.current[0], JUMP_FORCE, velocity.current[2]);
     }
 
-    // 3. Hybrid Raycasting (The Fix)
-    // If pointer is locked (in game), we shoot from Center (0,0).
-    // If pointer is unlocked (mouse visible), we shoot from Mouse Position (state.pointer).
+    // 3. Hybrid Raycasting
     if (!heldItem) {
         const isLocked = document.pointerLockElement !== null;
         const rayOrigin = isLocked ? new THREE.Vector2(0, 0) : state.pointer;
@@ -102,7 +111,7 @@ export const Player: React.FC<PlayerProps> = ({ heldItem, setHeldItem, throwItem
 
         if (validHit) {
             const data = getInteractableObject(validHit.object);
-            focusedItemRef.current = data ? data.type : null;
+            focusedItemRef.current = data;
             setHovering(true);
         } else {
             focusedItemRef.current = null;
@@ -117,12 +126,8 @@ export const Player: React.FC<PlayerProps> = ({ heldItem, setHeldItem, throwItem
   // Interaction Click Handler
   useEffect(() => {
     const onMouseDown = (e: MouseEvent) => {
-      // Left click only
       if (e.button !== 0) return; 
 
-      // Note: We do not check pointerLockElement here. 
-      // We want the click to work IMMEDIATELY even if unlocking/locking logic is happening.
-      
       if (heldItem) {
         // Throw Logic
         const direction = new THREE.Vector3();
@@ -138,14 +143,16 @@ export const Player: React.FC<PlayerProps> = ({ heldItem, setHeldItem, throwItem
       } else {
         // Pickup Logic
         if (focusedItemRef.current) {
-            setHeldItem(focusedItemRef.current);
+            // If it's a Spawner, id is undefined (creates infinite copies)
+            // If it's an Item on ground, id is present (removes it from world)
+            pickUpItem(focusedItemRef.current.type, focusedItemRef.current.id);
         }
       }
     };
     
     window.addEventListener('mousedown', onMouseDown);
     return () => window.removeEventListener('mousedown', onMouseDown);
-  }, [heldItem, camera, setHeldItem, throwItem]);
+  }, [heldItem, camera, pickUpItem, throwItem]);
 
   return (
     <>

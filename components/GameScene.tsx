@@ -1,45 +1,46 @@
 import React from 'react';
 import { World } from './World';
 import { Player } from './Player';
-import { Ingredient, useHotDogListener } from './GameObjects';
+import { Ingredient } from './GameObjects';
 import { GameState, IngredientType } from '../types';
 
 interface GameSceneProps {
   gameState: GameState;
-  setHeldItem: (item: IngredientType | null) => void;
+  pickUpItem: (type: IngredientType, id?: string) => void;
   throwItem: (pos: [number, number, number], vel: [number, number, number]) => void;
   removeIngredient: (id: string) => void;
-  addScore: () => void;
+  handleLandOnPlate: (type: IngredientType) => boolean;
   setHovering: (hover: boolean) => void;
   setIsLocked: (locked: boolean) => void;
+  nextNeededIngredient: IngredientType | null;
 }
 
 export const GameScene: React.FC<GameSceneProps> = ({ 
   gameState, 
-  setHeldItem, 
+  pickUpItem, 
   throwItem, 
   removeIngredient, 
-  addScore,
+  handleLandOnPlate,
   setHovering,
-  setIsLocked
+  setIsLocked,
+  nextNeededIngredient
 }) => {
   
-  useHotDogListener(() => {
-    addScore();
-  });
-
   return (
     <>
       <Player 
         heldItem={gameState.heldItem}
-        setHeldItem={setHeldItem}
+        pickUpItem={pickUpItem}
         throwItem={throwItem}
         setHovering={setHovering}
         setIsLocked={setIsLocked}
       />
       
       <World 
-        addScore={addScore}
+        plateState={gameState.plate}
+        nextNeededIngredient={nextNeededIngredient}
+        heldItem={gameState.heldItem}
+        completedCount={gameState.completedCount}
       />
 
       {gameState.activeIngredients.map((ing) => (
@@ -50,6 +51,7 @@ export const GameScene: React.FC<GameSceneProps> = ({
           initialPosition={ing.position}
           initialVelocity={ing.velocity}
           onRemove={removeIngredient}
+          onLandOnPlate={handleLandOnPlate}
         />
       ))}
     </>

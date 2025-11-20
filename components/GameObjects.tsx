@@ -1,17 +1,9 @@
-import React, { useState } from 'react';
+/// <reference lib="dom" />
+import React, { useState, useRef, useEffect } from 'react';
 import { useBox, useCylinder } from '@react-three/cannon';
 import { IngredientType, INGREDIENT_COLORS } from '../types';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-
-export const plateState = {
-    hasBun: false,
-    hasSausage: false,
-    reset: () => {
-        plateState.hasBun = false;
-        plateState.hasSausage = false;
-    }
-};
 
 interface IngredientProps {
   id: string;
@@ -19,12 +11,14 @@ interface IngredientProps {
   initialPosition: [number, number, number];
   initialVelocity: [number, number, number];
   onRemove: (id: string) => void;
+  onLandOnPlate: (type: IngredientType) => boolean;
 }
 
 export const Ingredient: React.FC<IngredientProps> = ({ 
-    id, type, initialPosition, initialVelocity, onRemove 
+    id, type, initialPosition, initialVelocity, onRemove, onLandOnPlate 
 }) => {
     const [isDead, setIsDead] = useState(false);
+    const cooldown = useRef(0); // Debounce plate checks
 
     const isBun = type === IngredientType.BUN;
     
@@ -46,62 +40,80 @@ export const Ingredient: React.FC<IngredientProps> = ({
             angularDamping: 0.1, 
           }));
 
-    useFrame(() => {
+    // Cleanup timer (15 seconds)
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setIsDead(true);
+            onRemove(id);
+        }, 15000);
+        return () => clearTimeout(timer);
+    }, [id, onRemove]);
+
+    useFrame((_, delta) => {
         if (!ref.current || isDead) return;
         
+        if (cooldown.current > 0) cooldown.current -= delta;
+
         const pos = ref.current.position;
         
+        // Fall off map cleanup
         if (pos.y < -10) {
+            setIsDead(true);
             onRemove(id);
             return;
         }
 
-        // Plate Check
-        const platePos = new THREE.Vector3(0, 1.8, -10);
+        // Plate Interaction Zone
+        // Using a slightly larger radius for better feel
+        const platePos = new THREE.Vector3(0, 1.0, -10);
+        // Ignore height difference if above plate, focusing on X/Z plane primarily for detection
+        // but let's do simple 3D distance for now
         const dist = pos.distanceTo(platePos);
         
-        if (dist < 2.5) {
-            api.velocity.set(0,0,0);
-            api.angularVelocity.set(0,0,0);
-
-            if (type === IngredientType.BUN && !plateState.hasBun) {
-                plateState.hasBun = true;
-            } else if (type === IngredientType.SAUSAGE && !plateState.hasSausage) {
-                plateState.hasSausage = true;
-            }
-
-            if (plateState.hasBun && plateState.hasSausage) {
-                window.dispatchEvent(new CustomEvent('hotdog-made'));
-                plateState.reset();
-                onRemove(id); 
+        if (dist < 2.0 && cooldown.current <= 0) {
+            // Attempt to plate it
+            const accepted = onLandOnPlate(type);
+            
+            if (accepted) {
+                setIsDead(true);
+                onRemove(id);
+            } else {
+                // REJECTED! Eject the item so it doesn't get stuck.
+                // Apply a random upward/outward force
+                const angle = Math.random() * Math.PI * 2;
+                const force = 10;
+                api.velocity.set(
+                    Math.sin(angle) * force, 
+                    10, // Upward pop
+                    Math.cos(angle) * force
+                );
+                api.angularVelocity.set(Math.random() * 10, Math.random() * 10, Math.random() * 10);
+                
+                // Set cooldown so we don't spam the rejection message/force
+                cooldown.current = 1.0;
             }
         }
     });
 
     return (
-        // ADDED: userData interactable: true so you can pick these up off the floor
-        <group ref={ref as any} userData={{ interactable: true, type }}>
+        // userData interactable: true with ID allows picking this specific item up
+        <group ref={ref as any} userData={{ interactable: true, type, id }}>
             {isBun ? (
                 <mesh castShadow receiveShadow>
-                    <capsuleGeometry args={[0.2, 0.6, 4, 8]} />
+                    <boxGeometry args={[0.7, 0.3, 0.4]} />
                     <meshStandardMaterial color={INGREDIENT_COLORS[type]} roughness={0.8} />
-                    <group scale={[1, 0.7, 1]}>
-                    </group>
+                    {/* Detail: Split in bun */}
+                    <mesh position={[0, 0.1, 0]} scale={[0.9, 0.1, 0.8]}>
+                        <boxGeometry args={[0.7, 0.1, 0.1]} />
+                        <meshStandardMaterial color="#D4B483" />
+                    </mesh>
                 </mesh>
             ) : (
-                <mesh castShadow receiveShadow>
-                    <capsuleGeometry args={[0.1, 0.6, 4, 8]} />
+                <mesh castShadow receiveShadow rotation={[Math.PI/2, 0, 0]}>
+                    <capsuleGeometry args={[0.1, 0.6, 8, 16]} />
                     <meshStandardMaterial color={INGREDIENT_COLORS[type]} roughness={0.3} metalness={0.1} />
                 </mesh>
             )}
         </group>
     );
-};
-
-export const useHotDogListener = (callback: () => void) => {
-    React.useEffect(() => {
-        const handler = () => callback();
-        window.addEventListener('hotdog-made', handler);
-        return () => window.removeEventListener('hotdog-made', handler);
-    }, [callback]);
 };

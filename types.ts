@@ -10,11 +10,19 @@ export interface ThrownIngredient {
   velocity: [number, number, number];
 }
 
+export interface PlateState {
+  hasBun: boolean;
+  hasSausage: boolean;
+}
+
 export interface GameState {
   score: number;
   heldItem: IngredientType | null;
   activeIngredients: ThrownIngredient[];
+  plate: PlateState;
   lastMessage: string;
+  completedCount: number;
+  gameWon: boolean;
 }
 
 export const INGREDIENT_COLORS = {
